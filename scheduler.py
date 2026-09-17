@@ -1,3 +1,4 @@
+
 import schedule
 import time
 import logging
@@ -6,10 +7,11 @@ logger = logging.getLogger(__name__)
 
 
 def start_scheduler(job_func):
-    """Run job_func every hour, forever."""
     schedule.every(1).hours.do(job_func)
-    logger.info("⏰ Scheduler started — running every hour")
-
+    logger.info("⏰ Scheduler running every hour")
     while True:
-        schedule.run_pending()
-        time.sleep(30)  # Check every 30 seconds
+        try:
+            schedule.run_pending()
+        except Exception as e:
+            logger.error(f"Scheduler error: {e}")
+        time.sleep(30)
