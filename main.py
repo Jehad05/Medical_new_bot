@@ -4,7 +4,7 @@ import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
 import requests
-from fetcher import fetch_all_news, format_message
+from fetcher import fetch_all_news, format_messages
 from scheduler import start_scheduler
 
 load_dotenv()
@@ -21,25 +21,32 @@ if not BOT_TOKEN or not CHAT_ID:
     raise ValueError("❌ BOT_TOKEN or CHAT_ID missing!")
 
 
-def send_news():
-    logger.info("🔄 Fetching news...")
-    articles = fetch_all_news()
-    message = format_message(articles)
+def send_message(text: str):
+    """Send a single message to Telegram."""
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
             json={
                 "chat_id": CHAT_ID,
-                "text": message,
+                "text": text,
                 "parse_mode": "HTML",
                 "disable_web_page_preview": True
             },
             timeout=15,
         )
         r.raise_for_status()
-        logger.info("✅ News sent!")
+        logger.info("✅ Message sent!")
     except Exception as e:
         logger.error(f"❌ Send failed: {e}")
+
+
+def send_news():
+    """Fetch news and send one message per source."""
+    logger.info("🔄 Fetching news...")
+    news = fetch_all_news()
+    messages = format_messages(news)
+    for msg in messages:
+        send_message(msg)
 
 
 class HealthHandler(BaseHTTPRequestHandler):
