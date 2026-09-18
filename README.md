@@ -58,11 +58,21 @@ Go to [railway.app](https://railway.app) and sign up (GitHub login recommended)
 - Connect your repository
 
 ### Step 3 — Add environment variables
-In your Railway project:
-- Go to **Variables** tab
-- Add `BOT_TOKEN` and `CHAT_ID`
+In your Railway project, go to **Variables** tab and add:
+- `BOT_TOKEN`
+- `CHAT_ID`
+- `DB_PATH` = `/data/seen.db`
 
-### Step 4 — Deploy
+### Step 4 — Add a Volume (required for deduplication)
+1. Open your service card
+2. Go to **Volumes** tab
+3. Click **+ New Volume**
+4. Set **Mount Path** = `/data`
+5. Redeploy
+
+> ⚠️ Without the Volume, the database resets on every deploy and the bot will send duplicate news.
+
+### Step 5 — Deploy
 Railway will automatically detect Python and deploy your bot. It will run 24/7.
 
 ---
@@ -71,10 +81,14 @@ Railway will automatically detect Python and deploy your bot. It will run 24/7.
 
 ```
 medical-news-bot/
-├── main.py          # Entry point + Telegram sender
-├── fetcher.py       # RSS fetching from all sources
-├── scheduler.py     # Hourly job runner
+├── main.py          # Entry point + Telegram + Health server
+├── fetcher.py       # RSS fetching + formatting
+├── scheduler.py     # Hourly job + daily cleanup
+├── storage.py       # SQLite deduplication
+├── config.py        # Central configuration
 ├── requirements.txt # Python dependencies
+├── Procfile         # Process definition
+├── railway.json     # Railway deploy config
 ├── .env.example     # Environment variables template
 ├── .gitignore       # Protects sensitive files
 └── README.md        # This file
@@ -82,23 +96,32 @@ medical-news-bot/
 
 ## ⚙️ Configuration
 
-To add or remove news sources, edit the `SOURCES` dictionary in `fetcher.py`:
+All settings are in `config.py`. Key variables:
 
-```python
-SOURCES = {
-    "PubMed": "https://pubmed.ncbi.nlm.nih.gov/rss/...",
-    "WHO": "https://www.who.int/rss-feeds/news-english.xml",
-    "BBC Health": "https://feeds.bbci.co.uk/news/health/rss.xml",
-    # Add more sources here
-}
-```
+| Variable | Default | Description |
+|---|---|---|
+| `MAX_PER_SOURCE` | 3 | Max articles per source per run |
+| `MAX_AGE_HOURS` | 24 | Skip articles older than N hours |
+| `DB_PATH` | `/data/seen.db` | SQLite database path |
+| `SEEN_RETENTION_DAYS` | 7 | Days to keep dedup records |
 
-To change the sending interval, edit `scheduler.py`:
-```python
-schedule.every(1).hours.do(job_func)   # Every hour
-schedule.every(30).minutes.do(job_func) # Every 30 minutes
-schedule.every().day.at("08:00").do(job_func) # Every day at 8 AM
-```
+To add or remove news sources, edit `SOURCES` in `config.py`.
+
+## 🏥 Health Check
+
+The bot runs a lightweight HTTP server on `PORT` (default 8080):
+- `GET /` → returns `OK`
+- `GET /stats` → returns DB size and total seen count
+
+## 🗄️ Deduplication
+
+SQLite database at `/data/seen.db` tracks sent article links.
+- Automatically cleaned up after 7 days
+- Hard cap at 10,000 rows
+- Daily VACUUM at 03:00 UTC to reclaim disk space
+
+> ⚠️ **Never commit `.env`** — it contains your BOT_TOKEN.
+> If leaked, revoke it immediately via @BotFather → `/revoke`.
 
 ## 📄 License
 MIT
